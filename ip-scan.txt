@@ -1,0 +1,26 @@
+# Path to your scan results file
+$file = "C:\Users\zafre\Documents\Loranet\scan-ip.txt"
+
+# Output files for active & unused IPs
+$activeFile = "C:\Users\zafre\Documents\Loranet\active-ips.txt"
+$unusedFile = "C:\Users\zafre\Documents\Loranet\unused-ips.txt"
+
+# Extract ACTIVE IPs
+Select-String -Path $file -Pattern "ACTIVE" | ForEach-Object {
+    ($_ -split " ")[0]
+} | Out-File $activeFile -Encoding utf8
+
+# Extract UNUSED IPs
+Select-String -Path $file -Pattern "UNUSED" | ForEach-Object {
+    ($_ -split " ")[0]
+} | Out-File $unusedFile -Encoding utf8
+
+# Optional: Sort the lists numerically
+(Get-Content $activeFile | Sort-Object {[version]$_}) | Set-Content $activeFile
+(Get-Content $unusedFile | Sort-Object {[version]$_}) | Set-Content $unusedFile
+
+# Count and display results
+Write-Host "✅ Active IPs saved to $activeFile"
+Write-Host "📝 Unused IPs saved to $unusedFile"
+Write-Host ("Active IPs: " + (Get-Content $activeFile).Count)
+Write-Host ("Unused IPs: " + (Get-Content $unusedFile).Count)

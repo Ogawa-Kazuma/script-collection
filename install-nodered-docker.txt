@@ -1,0 +1,13 @@
+sudo mkdir -p /data/nodered/data && sudo chown -R 1000:1000 /data/nodered && cat <<'EOF' | sudo tee /data/nodered/docker-compose.yml >/dev/null
+version: "3.8"
+services:
+  nodered:
+    image: nodered/node-red:latest
+    container_name: nodered
+    user: "0:0"
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - /data/nodered/data:/data
+EOF
+&& sudo docker compose -f /data/nodered/docker-compose.yml up -d && sleep 10 && sudo docker exec -u 0 nodered sed -i '/^ *contextStorage:/,/},/c\    contextStorage: {\n        default: {\n            module: "localfilesystem"\n        },\n    },' /data/settings.js && sudo docker exec -u 0 nodered bash -c 'cd /data && echo "{ \"name\": \"node-red-project\", \"version\": \"0.0.1\", \"private\": true, \"dependencies\": { \"node-red-contrib-queue-gate\": \"~1.5.5\", \"node-red-node-ping\": \"~0.3.3\", \"node-red-node-serialport\": \"~2.0.3\" } }" > package.json && npm install --omit=dev --no-fund --no-audit' && sudo docker restart nodered

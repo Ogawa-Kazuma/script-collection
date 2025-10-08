@@ -1,0 +1,7 @@
+sudo apt update && sudo apt install git cmake build-essential curl libcurl4-openssl-dev
+
+git clone https://github.com/ggml-org/llama.cpp
+cd llama.cpp
+
+cmake -B build
+cmake --build build --config Release
