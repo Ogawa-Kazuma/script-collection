@@ -1,0 +1,6 @@
+sudo DEBIAN_FRONTEND=noninteractive \
+UCF_FORCE_CONFFOLD=1 \
+apt update && \
+sudo DEBIAN_FRONTEND=noninteractive \
+UCF_FORCE_CONFFOLD=1 \
+apt -y upgrade
