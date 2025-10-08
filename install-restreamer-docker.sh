@@ -37,15 +37,23 @@ services:
     container_name: restreamer
     restart: unless-stopped
     ports:
-      - "8080:8080"    # Web UI
-      - "1935:1935"    # RTMP input
+      - "8080:8080"   # Web UI
+      - "1935:1935"   # RTMP input
     environment:
       - RS_USERNAME=admin
       - RS_PASSWORD=changeme
       - RS_TOKEN=restreamer
+      # === Auto Input Configuration ===
+      - RS_INPUT_TYPE=rtsp
+      - RS_INPUT_URL=rtsp://admin:password@192.168.1.11:554/live/ch00_0
+      - RS_INPUT_AUDIO=false
+      - RS_INPUT_RECONNECT=true
+      # Optional: set output to internal HLS (for browser playback)
+      - RS_OUTPUT_TYPE=hls
+      - RS_OUTPUT_HLS=true
     volumes:
-      - $DATA_DIR/data:/restreamer/db
-      - $DATA_DIR/db:/restreamer/recordings
+      - /data/restreamer/data:/restreamer/db
+      - /data/restreamer/db:/restreamer/recordings
     network_mode: bridge
 EOF
 
@@ -56,3 +64,4 @@ sudo docker compose -f "$COMPOSE_FILE" up -d
 echo "✅ Restreamer setup complete!"
 echo "Access it at: http://<your-device-ip>:8080"
 echo "Login with username: admin, password: changeme"
+
