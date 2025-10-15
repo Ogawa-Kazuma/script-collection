@@ -1,4 +1,5 @@
 #!/bin/bash
+
 set -e
 
 echo "=== 🧩 Installing Tailscale inside Docker (with /data persistence) ==="
@@ -69,4 +70,5 @@ echo "To view logs: sudo docker logs tailscale"
 echo "To authenticate manually (if no auth key used): sudo docker exec -it tailscale tailscale up"
 echo ""
 echo "Done!"
+
 
