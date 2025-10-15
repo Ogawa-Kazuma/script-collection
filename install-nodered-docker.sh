@@ -27,7 +27,7 @@ EOF
 
 # === Start Node-RED ===
 echo "[3/6] Starting Node-RED container..."
-sudo docker compose "$DOCKER_COMPOSE_FILE" up -d
+sudo docker compose -f "$DOCKER_COMPOSE_FILE" up -d
 sleep 10
 
 # === Enable file-based context storage ===
@@ -66,4 +66,5 @@ chown 1000:1000 /data/flows.json
 sudo docker restart nodered
 echo "✅ Node-RED installed and configured successfully!"
 echo "🌐 Access it at: http://localhost:1880"
+
 
