@@ -5,7 +5,7 @@ echo "=== Docker & Docker Compose Installer (with /data/docker storage) ==="
 
 # Update and install prerequisites
 echo "[1/8] Installing required packages..."
-sudo apt update && sudo apt install -y apt-transport-https ca-certificates curl software-properties-common gnupg lsb-release --fix-missing
+sudo apt update && sudo apt install -y apt-transport-https ca-certificates curl docker-compose-plugin software-properties-common gnupg lsb-release --fix-missing
 
 # Prepare directories
 echo "[2/8] Preparing directories..."
@@ -49,4 +49,5 @@ docker-compose --version
 echo
 echo "✅ Docker is using storage at: $(sudo docker info 2>/dev/null | grep "Docker Root Dir" || echo "/data/docker")"
 echo "✅ Use 'sudo docker ps' to verify Docker is working."
+
 
