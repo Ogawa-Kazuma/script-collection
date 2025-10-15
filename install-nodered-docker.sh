@@ -1,4 +1,5 @@
 #!/bin/bash
+
 set -e
 
 # === Configuration ===
@@ -66,5 +67,6 @@ chown 1000:1000 /data/flows.json
 sudo docker restart nodered
 echo "✅ Node-RED installed and configured successfully!"
 echo "🌐 Access it at: http://localhost:1880"
+
 
 
