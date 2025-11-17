@@ -1,5 +1,4 @@
 #!/bin/bash
-
 set -e
 
 echo "=== 🧩 Installing Tailscale inside Docker (with /data persistence) ==="
@@ -22,7 +21,7 @@ fi
 
 # --- Step 2: Create /data/tailscale structure ---
 echo "Setting up Tailscale data directory..."
-sudo mkdir -p /data/tailscale/state
+mkdir -p /data/tailscale/state
 
 # --- Step 3: Generate docker-compose.yml ---
 cat > /data/tailscale/docker-compose.yml <<'EOF'
@@ -57,11 +56,11 @@ fi
 # --- Step 5: Start container ---
 cd /data/tailscale
 echo "Starting Tailscale container..."
-sudo docker compose up -d
+docker compose up -d
 
 # --- Step 6: Verification ---
 sleep 3
-sudo docker ps --filter name=tailscale
+docker ps --filter name=tailscale
 
 echo "=== ✅ Tailscale Docker installation complete ==="
 echo ""
@@ -70,5 +69,3 @@ echo "To view logs: sudo docker logs tailscale"
 echo "To authenticate manually (if no auth key used): sudo docker exec -it tailscale tailscale up"
 echo ""
 echo "Done!"
-
-
