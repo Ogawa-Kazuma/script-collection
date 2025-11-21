@@ -1,0 +1,6 @@
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash
+\. "$HOME/.nvm/nvm.sh"
+nvm install 20
+node -v # Should print "v20.19.5".
+npm -v # Should print "10.8.2".
+npm install -g --unsafe-perm node-red

@@ -2,7 +2,7 @@
 setlocal enabledelayedexpansion
 
 :: Set your subnet here
-set SUBNET=192.168.1
+set SUBNET=192.168.6
 
 :: Output files
 set ACTIVE=active-ips.txt

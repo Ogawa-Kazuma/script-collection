@@ -12,24 +12,31 @@ sudo udevadm trigger
 sudo nano /etc/systemd/system/node-red.service
 
 [Unit]
-Description=Node-RED
+Description=Node-RED (root using admin's Node 20)
 After=network.target
 
 [Service]
-ExecStart=/home/admin/.nvm/versions/node/v20.19.5/bin/node-red
-WorkingDirectory=/home/admin
-User=admin
-Group=admin
-Environment=NODE_ENV=production
+Type=simple
+
+User=root
+Group=root
+
+# Use admin's Node.js and Node-RED paths
+Environment="PATH=/root/.nvm/versions/node/v20.19.5/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
+ExecStart=/root/.nvm/versions/node/v20.19.5/bin/node-red
+
+WorkingDirectory=/root
+
 Restart=on-failure
-# Optional: prevent environment problems with NVM
-Environment=PATH=/home/admin/.nvm/versions/node/v20.19.5/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
 [Install]
 WantedBy=multi-user.target
+
 
 
 sudo systemctl daemon-reload
 sudo systemctl enable node-red
 sudo systemctl start node-red
 sudo systemctl status node-red
+
