@@ -9,10 +9,10 @@ sudo mkdir -p /etc/udev/rules.d
 echo 'KERNEL=="ttyUSB[0-9]*", MODE="0666"' | sudo tee /etc/udev/rules.d/99-serial.rules
 sudo udevadm control --reload-rules
 sudo udevadm trigger
-sudo nano /etc/systemd/system/node-red.service
+sudo nano /etc/systemd/system/nodered.service
 
 [Unit]
-Description=Node-RED (root using admin's Node 20)
+Description=NodeRED (root using admin's Node 20)
 After=network.target
 
 [Service]
@@ -21,7 +21,6 @@ Type=simple
 User=root
 Group=root
 
-# Use admin's Node.js and Node-RED paths
 Environment="PATH=/root/.nvm/versions/node/v20.19.5/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
 ExecStart=/root/.nvm/versions/node/v20.19.5/bin/node-red
@@ -39,4 +38,5 @@ sudo systemctl daemon-reload
 sudo systemctl enable node-red
 sudo systemctl start node-red
 sudo systemctl status node-red
+
 
