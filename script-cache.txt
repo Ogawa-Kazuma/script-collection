@@ -1,4 +1,5 @@
-echo 'Acquire::http::Proxy "http://192.168.6.19:3142/";' | sudo tee /etc/apt/apt.conf.d/02proxy >/dev/null && sudo apt update && sudo apt install -y nano bash wget curl usbutils traceroute socat screen ffmpeg
+echo 'Acquire::http::Proxy "http://192.168.6.19:3142/";' | sudo tee /etc/apt/apt.conf.d/02proxy >/dev/null && sudo apt update && sudo apt install -y nano bash wget curl usbutils traceroute socat screen ffmpeg mosh
 
 
-echo 'Acquire::http::Proxy "http://192.168.1.59:3142/";' | sudo tee /etc/apt/apt.conf.d/02proxy >/dev/null && sudo apt update && sudo apt install -y nano bash wget curl usbutils traceroute socat screen ffmpeg
+echo 'Acquire::http::Proxy "http://192.168.1.59:3142/";' | sudo tee /etc/apt/apt.conf.d/02proxy >/dev/null && sudo apt update && sudo apt install -y nano bash wget curl usbutils traceroute socat screen ffmpeg mosh
+
