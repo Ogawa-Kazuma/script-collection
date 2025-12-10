@@ -1,33 +1,22 @@
 #!/bin/bash
-set -e   # Exit immediately if a command exits with a non-zero status
-set -u   # Treat unset variables as an error
+sudo apt remove $(dpkg --get-selections docker.io docker-compose docker-compose-v2 docker-doc podman-docker containerd runc | cut -f1)
 
-echo "Removing old Docker versions..."
-sudo apt-get remove -y docker docker-engine docker.io containerd runc
+# Add Docker's official GPG key:
+sudo apt update
+sudo apt install ca-certificates curl
+sudo install -m 0755 -d /etc/apt/keyrings
+sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+sudo chmod a+r /etc/apt/keyrings/docker.asc
 
-echo "Updating package lists..."
-sudo apt-get update
+# Add the repository to Apt sources:
+sudo tee /etc/apt/sources.list.d/docker.sources <<EOF
+Types: deb
+URIs: https://download.docker.com/linux/ubuntu
+Suites: $(. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}")
+Components: stable
+Signed-By: /etc/apt/keyrings/docker.asc
+EOF
 
-echo "Installing required dependencies..."
-sudo apt-get install -y ca-certificates curl gnupg lsb-release
+sudo apt update
 
-echo "Adding Docker's official GPG key..."
-sudo mkdir -p /etc/apt/keyrings
-curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-
-echo "Setting up Docker repository..."
-sudo mkdir -p /etc/apt/sources.list.d
-echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu focal stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-
-echo "Updating package lists again..."
-sudo apt-get update
-
-echo "Installing Docker packages..."
-sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-
-echo "Enabling and starting Docker service..."
-sudo systemctl enable docker
-sudo systemctl start docker
-
-echo "Docker installation complete. Status:"
-sudo systemctl status docker --no-pager
+sudo apt install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
