@@ -1,0 +1,22 @@
+services:
+  filebrowser:
+    image: filebrowser/filebrowser
+    container_name: filebrowser
+    ports:
+      - "8080:80"
+    volumes:
+      # --- MODIFIED LINE ---
+      # This binds your host folder to the container's main data path (/srv).
+      - /mnt/ssd/recording:/srv
+      # ---------------------
+      
+      # Keep these as named volumes for persistence
+      - filebrowser_database:/database
+      - filebrowser_config:/config
+      
+    restart: unless-stopped
+
+# Only define the named volumes that are still in use
+volumes:
+  filebrowser_database:
+  filebrowser_config:
