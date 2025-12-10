@@ -1,0 +1,20 @@
+version: '3.8'
+
+services:
+  restreamer:
+    image: datarhei/restreamer:latest
+    container_name: restreamer
+    # Use environment variables to set the initial login credentials
+    environment:
+      - RS_USERNAME=admin
+      - RS_PASSWORD=1qaz2wsx
+    # Map the container port (8080) to the host port (8080)
+    ports:
+      - "8080:8080"
+    # Map the host's directory for persistent data to the container's path
+    volumes:
+      # -v /mnt/restreamer/db:/restreamer/db
+      - /mnt/restreamer/db:/restreamer/db
+    # Set the restart policy to always restart the container unless it is stopped manually
+    restart: always
+    # Run the container in detached mode (handled by 'docker compose up -d')
