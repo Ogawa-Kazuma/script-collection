@@ -46,7 +46,7 @@ DEFAULT_MIRRORS = [
 ]
 
 # Default test sizes (APT-realistic)
-METADATA_TEST_SIZE = 2_000_000  # 2 MB - lets TCP stabilize
+METADATA_TEST_SIZE = 300_000   # ~InRelease real size (200-400 KB typical)
 POOL_TEST_SIZE = 2_000_000     # 2 MB - typical small package size
 
 
@@ -81,18 +81,111 @@ def detect_ubuntu_release() -> str:
     return 'jammy'
 
 
-def find_pool_test_file(release: str) -> Optional[str]:
+def detect_architecture() -> str:
     """
-    Find a real package file in /pool/ for testing.
+    Auto-detect the Debian/Ubuntu architecture (e.g., amd64, arm64, armhf, i386).
+    Falls back to 'amd64' if detection fails.
+    """
+    # Try dpkg --print-architecture first (most reliable for Debian/Ubuntu)
+    try:
+        result = subprocess.run(
+            ['dpkg', '--print-architecture'],
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        if result.returncode == 0:
+            arch = result.stdout.strip().lower()
+            if arch:
+                return arch
+    except (subprocess.TimeoutExpired, FileNotFoundError, subprocess.SubprocessError):
+        pass
+    
+    # Fallback: map uname -m to Debian architecture
+    try:
+        result = subprocess.run(
+            ['uname', '-m'],
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        if result.returncode == 0:
+            machine = result.stdout.strip().lower()
+            # Map common machine types to Debian architectures
+            arch_map = {
+                'x86_64': 'amd64',
+                'aarch64': 'arm64',
+                'armv7l': 'armhf',
+                'armv6l': 'armel',
+                'i386': 'i386',
+                'i686': 'i386',
+                'ppc64le': 'ppc64el',
+                's390x': 's390x',
+            }
+            return arch_map.get(machine, 'amd64')
+    except (subprocess.TimeoutExpired, FileNotFoundError, subprocess.SubprocessError):
+        pass
+    
+    # Final fallback
+    return 'amd64'
+
+
+def find_pool_test_file(release: str, arch: str) -> Optional[str]:
+    """
+    Find a real package file in /pool/ for testing, architecture-specific.
     Returns a common small package path like pool/main/z/zlib/...
+    
+    Args:
+        release: Ubuntu release codename (e.g., jammy, focal)
+        arch: Debian architecture (e.g., amd64, arm64, armhf)
     """
-    # Common small packages that exist in most releases
-    candidates = [
-        f"pool/main/z/zlib/zlib1g_1.2.11.dfsg-2ubuntu9.2_amd64.deb",  # jammy
-        f"pool/main/z/zlib/zlib1g_1.2.11.dfsg-2ubuntu1.3_amd64.deb",  # focal
-        f"pool/main/z/zlib/zlib1g_1.2.11.dfsg-2ubuntu10_amd64.deb",   # noble
-        f"pool/main/z/zlib/zlib1g_1.2.11.dfsg-2ubuntu9_amd64.deb",   # generic
-    ]
+    # Common small packages that exist in most releases, organized by release and architecture
+    # zlib1g is a good choice: small, common, exists on all architectures
+    package_candidates = {
+        'jammy': {
+            'amd64': 'pool/main/z/zlib/zlib1g_1.2.11.dfsg-2ubuntu9.2_amd64.deb',
+            'arm64': 'pool/main/z/zlib/zlib1g_1.2.11.dfsg-2ubuntu9.2_arm64.deb',
+            'armhf': 'pool/main/z/zlib/zlib1g_1.2.11.dfsg-2ubuntu9.2_armhf.deb',
+            'i386': 'pool/main/z/zlib/zlib1g_1.2.11.dfsg-2ubuntu9.2_i386.deb',
+            'ppc64el': 'pool/main/z/zlib/zlib1g_1.2.11.dfsg-2ubuntu9.2_ppc64el.deb',
+            's390x': 'pool/main/z/zlib/zlib1g_1.2.11.dfsg-2ubuntu9.2_s390x.deb',
+        },
+        'focal': {
+            'amd64': 'pool/main/z/zlib/zlib1g_1.2.11.dfsg-2ubuntu1.3_amd64.deb',
+            'arm64': 'pool/main/z/zlib/zlib1g_1.2.11.dfsg-2ubuntu1.3_arm64.deb',
+            'armhf': 'pool/main/z/zlib/zlib1g_1.2.11.dfsg-2ubuntu1.3_armhf.deb',
+            'i386': 'pool/main/z/zlib/zlib1g_1.2.11.dfsg-2ubuntu1.3_i386.deb',
+            'ppc64el': 'pool/main/z/zlib/zlib1g_1.2.11.dfsg-2ubuntu1.3_ppc64el.deb',
+            's390x': 'pool/main/z/zlib/zlib1g_1.2.11.dfsg-2ubuntu1.3_s390x.deb',
+        },
+        'noble': {
+            'amd64': 'pool/main/z/zlib/zlib1g_1.2.13.dfsg-1ubuntu1_amd64.deb',
+            'arm64': 'pool/main/z/zlib/zlib1g_1.2.13.dfsg-1ubuntu1_arm64.deb',
+            'armhf': 'pool/main/z/zlib/zlib1g_1.2.13.dfsg-1ubuntu1_armhf.deb',
+            'i386': 'pool/main/z/zlib/zlib1g_1.2.13.dfsg-1ubuntu1_i386.deb',
+            'ppc64el': 'pool/main/z/zlib/zlib1g_1.2.13.dfsg-1ubuntu1_ppc64el.deb',
+            's390x': 'pool/main/z/zlib/zlib1g_1.2.13.dfsg-1ubuntu1_s390x.deb',
+        },
+    }
+    
+    # Get architecture-specific candidate
+    candidates = []
+    if release in package_candidates:
+        if arch in package_candidates[release]:
+            candidates.append(package_candidates[release][arch])
+        # Fallback to amd64 if architecture not found
+        if arch != 'amd64' and 'amd64' in package_candidates[release]:
+            candidates.append(package_candidates[release]['amd64'])
+    
+    # Generic fallback candidates (try to construct from common patterns)
+    if not candidates:
+        # Try generic zlib package for this architecture
+        generic_patterns = [
+            f"pool/main/z/zlib/zlib1g_1.2.11.dfsg-2ubuntu9.2_{arch}.deb",
+            f"pool/main/z/zlib/zlib1g_1.2.11.dfsg-2ubuntu1.3_{arch}.deb",
+            f"pool/main/z/zlib/zlib1g_1.2.13.dfsg-1ubuntu1_{arch}.deb",
+        ]
+        candidates.extend(generic_patterns)
     
     # Try to find a real file by testing archive.ubuntu.com
     test_mirror = "http://archive.ubuntu.com/ubuntu/"
@@ -106,41 +199,106 @@ def find_pool_test_file(release: str) -> Optional[str]:
         except:
             continue
     
-    # Return first candidate as fallback
-    return candidates[0]
+    # Return first candidate as fallback (even if we can't verify it exists)
+    return candidates[0] if candidates else None
 
 
 class MirrorTester:
-    def __init__(self, timeout: int = 15, release: Optional[str] = None, passes: int = 3):
+    def __init__(self, timeout: int = 15, release: Optional[str] = None, 
+                 arch: Optional[str] = None, passes: int = 3, prefer_install: bool = False):
         self.timeout = timeout
         self.passes = passes
+        self.prefer_install = prefer_install
         self.release = release or detect_ubuntu_release()
+        self.arch = arch or detect_architecture()
         self.metadata_file = f"dists/{self.release}/InRelease"
-        self.pool_file = find_pool_test_file(self.release)
+        self.pool_file = find_pool_test_file(self.release, self.arch)
         self.results: List[Tuple[str, float, float, float, Optional[str]]] = []  # (url, pool_speed, metadata_speed, final_score, error)
         
         print(f"Detected Ubuntu release: {self.release}")
+        print(f"Detected architecture: {self.arch}")
         if self.pool_file:
             print(f"Using pool test file: {self.pool_file}")
+        else:
+            print("Warning: Could not find architecture-specific pool test file")
+        if self.prefer_install:
+            print("Install-speed mode: Requiring usable pool files (metadata-only mirrors excluded)")
+
+    def head_check(self, url: str) -> bool:
+        """
+        Pre-flight HEAD check to quickly identify dead mirrors.
+        Returns True if the URL is accessible (status 200 or 206).
+        Note: This is advisory only - some mirrors block HEAD but allow GET.
+        """
+        try:
+            req = urllib.request.Request(url, method='HEAD')
+            req.add_header('User-Agent', 'apt/2.7 (mirror-speed-test)')
+            with urllib.request.urlopen(req, timeout=5) as response:
+                return response.status in (200, 206)
+        except:
+            return False
+
+    def latency_probe(self, url: str) -> Optional[float]:
+        """
+        Measure latency (time to first byte) for a URL.
+        Returns latency in seconds, or None if probe fails.
+        APT cares about latency for many small GETs.
+        """
+        try:
+            start = time.monotonic()
+            req = urllib.request.Request(url)
+            req.add_header("Range", "bytes=0-0")  # Minimal request
+            req.add_header("User-Agent", "apt/2.7 (mirror-speed-test)")
+            with urllib.request.urlopen(req, timeout=5) as response:
+                response.read(1)  # Read one byte to measure TTFB
+            return time.monotonic() - start
+        except:
+            return None
 
     def download_test(self, url: str, size: int) -> Tuple[float, Optional[str]]:
         """
-        Download a file and measure speed.
+        Download a file using HTTP Range requests (matches APT behavior).
         Returns: (speed_mbps, error_message)
         """
         try:
-            start_time = time.time()
-            with urllib.request.urlopen(url, timeout=self.timeout) as response:
-                data = response.read(size)
-                elapsed_time = time.time() - start_time
+            # Use HTTP Range request to match APT behavior
+            # This avoids full-file dependency and prevents caching bias
+            headers = {
+                "Range": f"bytes=0-{size-1}",
+                "User-Agent": "apt/2.7 (mirror-speed-test)"
+            }
+            req = urllib.request.Request(url, headers=headers)
             
-            if elapsed_time == 0:
+            # Use monotonic time for accurate duration measurement
+            start_time = time.monotonic()
+            with urllib.request.urlopen(req, timeout=self.timeout) as response:
+                data = response.read()
+            elapsed_time = time.monotonic() - start_time
+            
+            if elapsed_time <= 0:
                 elapsed_time = 0.001
             
             bytes_downloaded = len(data)
             speed_mbps = (bytes_downloaded * 8) / (elapsed_time * 1_000_000)
             return (speed_mbps, None)
             
+        except urllib.error.HTTPError as e:
+            # Handle HTTP errors specifically (e.g., 404, 416 for range)
+            if e.code == 416:  # Range Not Satisfiable - try without range
+                try:
+                    req = urllib.request.Request(url)
+                    req.add_header('User-Agent', 'apt/2.7 (mirror-speed-test)')
+                    start_time = time.monotonic()
+                    with urllib.request.urlopen(req, timeout=self.timeout) as response:
+                        data = response.read(size)
+                    elapsed_time = time.monotonic() - start_time
+                    if elapsed_time <= 0:
+                        elapsed_time = 0.001
+                    speed_mbps = (len(data) * 8) / (elapsed_time * 1_000_000)
+                    return (speed_mbps, None)
+                except:
+                    return (0.0, f"HTTP {e.code}")
+            return (0.0, f"HTTP {e.code}")
         except urllib.error.URLError as e:
             return (0.0, f"Connection error: {str(e)}")
         except Exception as e:
@@ -149,61 +307,113 @@ class MirrorTester:
     def test_mirror(self, mirror_url: str) -> Tuple[str, float, float, float, Optional[str]]:
         """
         Test a mirror with multiple passes on both metadata and pool files.
+        Uses HEAD pre-check as advisory (soft fallback - APT never uses HEAD).
         Returns: (mirror_url, pool_speed_median, metadata_speed_median, final_score, error)
         """
         base_url = mirror_url.rstrip('/')
         metadata_url = f"{base_url}/{self.metadata_file}"
         pool_url = f"{base_url}/{self.pool_file}" if self.pool_file else None
         
+        # Pre-flight HEAD check for metadata (advisory only - some mirrors block HEAD)
+        head_ok = self.head_check(metadata_url)
+        if not head_ok:
+            # HEAD failures are advisory, not fatal - let GET decide
+            # Some mirrors block HEAD but allow GET (APT never uses HEAD)
+            pass  # Continue to actual GET test
+        
+        # Measure latency for both metadata and pool (APT often resolves pool hosts separately)
+        # Take minimum to account for CDN routing differences
+        lat_meta = self.latency_probe(metadata_url)
+        lat_pool = self.latency_probe(pool_url) if pool_url else None
+        latency = min([l for l in (lat_meta, lat_pool) if l is not None], default=None)
+        
         # Test metadata (InRelease) - multiple passes
         metadata_speeds = []
         for i in range(self.passes):
             speed, error = self.download_test(metadata_url, METADATA_TEST_SIZE)
             if error:
-                return (mirror_url, 0.0, 0.0, 0.0, error)
+                return (mirror_url, 0.0, 0.0, 0.0, f"Metadata test failed: {error}")
             metadata_speeds.append(speed)
             time.sleep(0.5)  # Small delay between passes
         
         metadata_median = statistics.median(metadata_speeds)
         
         # Test pool file (real package) - multiple passes
+        # Don't gate on HEAD - some mirrors block HEAD /pool/* but allow GET
+        # Let GET decide (APT never uses HEAD)
         pool_median = 0.0
+        pool_available = False
         if pool_url:
             pool_speeds = []
             for i in range(self.passes):
                 speed, error = self.download_test(pool_url, POOL_TEST_SIZE)
-                if error:
-                    # Pool file might not exist, but that's okay - use metadata only
-                    break
-                pool_speeds.append(speed)
+                if not error:
+                    pool_speeds.append(speed)
                 time.sleep(0.5)
             
             if pool_speeds:
                 pool_median = statistics.median(pool_speeds)
-            else:
-                # If pool test fails, weight metadata more heavily
-                pool_median = metadata_median * 0.8  # Assume pool is slightly slower
+                pool_available = True
         
-        # Calculate final score: 60% pool, 30% metadata, 10% failure penalty
-        # This matches real APT behavior where package downloads dominate
-        if pool_median > 0:
-            final_score = (0.6 * pool_median) + (0.3 * metadata_median)
+        # Calculate final score with proper weighting
+        # Don't fake pool speeds - treat missing pool as metadata-only mirror
+        if pool_available and pool_median > 0:
+            # Full test: weight depends on mode
+            if self.prefer_install:
+                # Install-speed mode: prioritize pool even more (75% pool, 15% metadata)
+                # APT installs are overwhelmingly pool-bound
+                final_score = (0.75 * pool_median) + (0.15 * metadata_median)
+            else:
+                # Default: 60% pool, 30% metadata (matches real APT behavior)
+                final_score = (0.6 * pool_median) + (0.3 * metadata_median)
         else:
-            # Fallback if pool test completely fails
-            final_score = metadata_median * 0.7  # Penalize for missing pool
+            # Metadata-only mirror: penalize heavily (APT cannot install without pool)
+            if self.prefer_install:
+                # Install-speed mode: hard-exclude metadata-only mirrors
+                # No pool = cannot install packages = score 0
+                return (mirror_url, 0.0, metadata_median, 0.0, "No usable pool (install-speed mode)")
+            else:
+                # Default mode: penalize but still show (informative)
+                # Use 0.6x to prevent metadata-only mirrors from ranking above full mirrors
+                final_score = 0.6 * metadata_median
+        
+        # Hard-cap metadata-only mirrors: they should never outrank usable mirrors
+        # APT would always prefer "slightly slower but installable" over "fast metadata but broken pool"
+        if not pool_available and not self.prefer_install:
+            final_score = min(final_score, metadata_median * 0.5)
+        
+        # Apply latency penalty (APT hates high latency, but tolerates ~1s RTT for bulk installs)
+        if latency and latency > 0:
+            # Gentler penalty: max(0.75, 1.0 - latency/3.0)
+            # Examples: 0.1s latency = 0.97x, 0.5s = 0.83x, 1.0s = 0.67x
+            # This matches real-world apt install behavior better
+            latency_penalty = max(0.75, 1.0 - (latency / 3.0))
+            final_score *= latency_penalty
+        
+        # Clamp absurd results (prevent CDN weirdness from dominating)
+        # Score should not exceed max(pool, metadata) by more than 10%
+        max_speed = max(pool_median, metadata_median) if (pool_median > 0 or metadata_median > 0) else 0
+        if max_speed > 0:
+            final_score = min(final_score, max_speed * 1.1)
+        final_score = max(0.0, final_score)  # Ensure non-negative
         
         return (mirror_url, pool_median, metadata_median, final_score, None)
 
     def test_mirrors(self, mirrors: List[str], max_workers: int = 10) -> List[Tuple[str, float, float, float, Optional[str]]]:
         """
-        Test multiple mirrors concurrently.
+        Test multiple mirrors concurrently with adaptive concurrency.
         """
+        # Adaptive concurrency: don't overwhelm mirrors or system
+        # APT doesn't hit many mirrors simultaneously on fresh installs
+        adaptive_workers = min(max_workers, max(4, len(mirrors) // 10))
+        
         print(f"\nTesting {len(mirrors)} mirrors...")
         print(f"Each mirror: {self.passes} passes on metadata + {self.passes} passes on pool file")
+        print(f"Using {adaptive_workers} concurrent workers (adaptive from {max_workers})")
         print("This will take several minutes...\n")
         
         results = []
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        with ThreadPoolExecutor(max_workers=adaptive_workers) as executor:
             future_to_mirror = {executor.submit(self.test_mirror, mirror): mirror 
                                for mirror in mirrors}
             
@@ -240,7 +450,8 @@ class MirrorTester:
         failed = [r for r in sorted_results if r[3] == 0]
         
         for i, (mirror, pool_speed, metadata_speed, final_score, error) in enumerate(successful[:top_n], 1):
-            print(f"{i:2d}.   {mirror:50s} {final_score:8.2f}   {pool_speed:8.2f}   {metadata_speed:8.2f}")
+            pool_indicator = f"{pool_speed:8.2f}" if pool_speed > 0 else "metadata"
+            print(f"{i:2d}.   {mirror:50s} {final_score:8.2f}   {pool_indicator:>8}   {metadata_speed:8.2f}")
         
         if failed:
             print(f"\nFailed mirrors ({len(failed)}):")
@@ -249,11 +460,16 @@ class MirrorTester:
         
         if successful:
             best = successful[0]
+            mirror_url, pool_speed, metadata_speed, final_score, _ = best
             print(f"\n{'='*90}")
-            print(f"RECOMMENDED MIRROR: {best[0]}")
-            print(f"  Final Score: {best[3]:.2f} Mbps (60% pool + 30% metadata)")
-            print(f"  Pool Speed:  {best[1]:.2f} Mbps (package downloads)")
-            print(f"  Meta Speed:  {best[2]:.2f} Mbps (index downloads)")
+            print(f"RECOMMENDED MIRROR: {mirror_url}")
+            if pool_speed > 0:
+                print(f"  Final Score: {final_score:.2f} Mbps (60% pool + 30% metadata)")
+                print(f"  Pool Speed:  {pool_speed:.2f} Mbps (package downloads)")
+            else:
+                print(f"  Final Score: {final_score:.2f} Mbps (metadata-only mirror)")
+                print(f"  Pool Speed:  N/A (package downloads not tested)")
+            print(f"  Meta Speed:  {metadata_speed:.2f} Mbps (index downloads)")
             print(f"{'='*90}")
 
 
@@ -365,9 +581,12 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  %(prog)s                          # Test default mirrors
+  %(prog)s                          # Test default mirrors (auto-detects release & arch)
+  %(prog)s --prefer-install         # Require usable pool files (optimize for install speed)
   %(prog)s --fetch-launchpad        # Fetch and test mirrors from Launchpad
   %(prog)s --fetch-launchpad --country US  # Fetch US mirrors only
+  %(prog)s --arch arm64             # Test for ARM64 architecture
+  %(prog)s --release focal --arch armhf  # Test for specific release and architecture
   %(prog)s --mirrors-file mirrors.txt  # Test mirrors from file
   %(prog)s --top 5                  # Show top 5 results
   %(prog)s --timeout 15             # Set timeout to 15 seconds
@@ -408,10 +627,22 @@ Examples:
     )
     
     parser.add_argument(
+        '--arch',
+        type=str,
+        help='Debian architecture (e.g., amd64, arm64, armhf, i386). Auto-detected if not specified.'
+    )
+    
+    parser.add_argument(
         '--passes',
         type=int,
         default=3,
         help='Number of test passes per mirror (default: 3, uses median)'
+    )
+    
+    parser.add_argument(
+        '--prefer-install',
+        action='store_true',
+        help='Require usable pool files (optimize for install speed). Metadata-only mirrors will be excluded.'
     )
     
     parser.add_argument(
@@ -457,7 +688,9 @@ Examples:
         sys.exit(1)
     
     # Test mirrors
-    tester = MirrorTester(timeout=args.timeout, release=args.release, passes=args.passes)
+    tester = MirrorTester(timeout=args.timeout, release=args.release, 
+                          arch=args.arch, passes=args.passes, 
+                          prefer_install=args.prefer_install)
     results = tester.test_mirrors(mirrors, max_workers=args.workers)
     
     # Output results
