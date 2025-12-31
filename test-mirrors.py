@@ -205,7 +205,8 @@ def find_pool_test_file(release: str, arch: str) -> Optional[str]:
 
 class MirrorTester:
     def __init__(self, timeout: int = 15, release: Optional[str] = None, 
-                 arch: Optional[str] = None, passes: int = 3, prefer_install: bool = False):
+                 arch: Optional[str] = None, passes: int = 3, prefer_install: bool = False,
+                 pool_test_size: Optional[int] = None):
         self.timeout = timeout
         self.passes = passes
         self.prefer_install = prefer_install
@@ -215,12 +216,29 @@ class MirrorTester:
         self.pool_file = find_pool_test_file(self.release, self.arch)
         self.results: List[Tuple[str, float, float, float, Optional[str]]] = []  # (url, pool_speed, metadata_speed, final_score, error)
         
+        # Determine pool test size (architecture-aware or user-specified)
+        if pool_test_size is not None:
+            self.pool_test_size = pool_test_size
+        elif self.arch in ('arm64', 'armhf', 'armel'):
+            # ARM packages are often larger, and ARM mirrors may have different storage
+            # Use larger test size to expose true sustained speed and disk/throttling limits
+            self.pool_test_size = 20_000_000  # 20 MB for ARM
+        else:
+            self.pool_test_size = POOL_TEST_SIZE  # Default 2 MB
+        
         print(f"Detected Ubuntu release: {self.release}")
         print(f"Detected architecture: {self.arch}")
         if self.pool_file:
             print(f"Using pool test file: {self.pool_file}")
         else:
             print("Warning: Could not find architecture-specific pool test file")
+        print(f"Pool test size: {self.pool_test_size / 1_000_000:.1f} MB")
+        
+        # Warn about challenging scenarios
+        if self.arch in ('arm64', 'armhf', 'armel') and self.release in ('focal', 'bionic', 'xenial'):
+            print(f"Note: {self.arch} + {self.release} has limited mirror coverage. "
+                  f"Official archive.ubuntu.com may be fastest despite not being 'local'.")
+        
         if self.prefer_install:
             print("Install-speed mode: Requiring usable pool files (metadata-only mirrors excluded)")
 
@@ -346,7 +364,7 @@ class MirrorTester:
         if pool_url:
             pool_speeds = []
             for i in range(self.passes):
-                speed, error = self.download_test(pool_url, POOL_TEST_SIZE)
+                speed, error = self.download_test(pool_url, self.pool_test_size)
                 if not error:
                     pool_speeds.append(speed)
                 time.sleep(0.5)
@@ -585,8 +603,9 @@ Examples:
   %(prog)s --prefer-install         # Require usable pool files (optimize for install speed)
   %(prog)s --fetch-launchpad        # Fetch and test mirrors from Launchpad
   %(prog)s --fetch-launchpad --country US  # Fetch US mirrors only
-  %(prog)s --arch arm64             # Test for ARM64 architecture
+  %(prog)s --arch arm64             # Test for ARM64 architecture (auto-uses 20 MB pool test)
   %(prog)s --release focal --arch armhf  # Test for specific release and architecture
+  %(prog)s --pool-test-size 20000000  # Use 20 MB pool test (better for ARM64/large packages)
   %(prog)s --mirrors-file mirrors.txt  # Test mirrors from file
   %(prog)s --top 5                  # Show top 5 results
   %(prog)s --timeout 15             # Set timeout to 15 seconds
@@ -646,6 +665,13 @@ Examples:
     )
     
     parser.add_argument(
+        '--pool-test-size',
+        type=int,
+        help='Size of pool test file in bytes (default: 2 MB for amd64, 20 MB for ARM). '
+             'Larger sizes better expose sustained speed and disk/throttling limits.'
+    )
+    
+    parser.add_argument(
         '--json',
         action='store_true',
         help='Output results in JSON format'
@@ -690,7 +716,8 @@ Examples:
     # Test mirrors
     tester = MirrorTester(timeout=args.timeout, release=args.release, 
                           arch=args.arch, passes=args.passes, 
-                          prefer_install=args.prefer_install)
+                          prefer_install=args.prefer_install,
+                          pool_test_size=args.pool_test_size)
     results = tester.test_mirrors(mirrors, max_workers=args.workers)
     
     # Output results
